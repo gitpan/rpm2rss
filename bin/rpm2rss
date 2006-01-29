@@ -1,0 +1,299 @@
+#!/usr/bin/perl
+
+#   This program is free software; you can redistribute it and/or
+#   modify it under the terms of the GNU Lesser General Public
+#   License version 2.1 as published by the Free Software Foundation.
+
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+#   Lesser General Public License for more details.
+
+#   You should have received a copy of the GNU Lesser General Public
+#   License along with this program; if not, write to the Free Software
+#   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+#   Copyright (c) 2006 - Sean Dague < sean at dague dot net >
+
+=head1 NAME
+
+rpm2rss - create an rss feed out of a set of rpms
+
+=head1 SYNOPSIS
+
+  rpm2rss -o mdk10.2.xml *rpm
+
+=head1 DESCRIPTION
+
+The intent of the rpm2rss program was to make it really easy to have
+an rss feed off of the various rpm repositories that I contribute to.
+This lets other people easily see what is being released and when, and
+keeps me from having to send out email reminders and the like.  
+
+It also reduces the work effort, as nearly every bit of information
+I'd put into an RSS feed already is in the rpm file somewhere.  By
+using the MD5 hash for guid, and the BUILDTIME for the publish time, I
+get a pretty accurate, and unique, interleaving of entries.
+
+=head1 BUGS
+
+None know, but see TODO list for things not done yet.
+
+=head1 AUTHOR
+
+Sean Dague < sean at dague dot net >
+
+=head1 COPYRIGHT
+
+Copyright (c) 2006 Sean Dague
+
+=cut
+
+use strict;
+use RPM2;
+use XML::RSS;
+use Data::Dumper;
+use POSIX qw(strftime);
+use AppConfig qw(:expand :argcount);
+
+our $VERSION = '0.1';
+
+our @OPTIONALS = qw(copyright editor webmaster image);
+our @REQUIREDS = qw(title language link description);
+
+my $conf = appconf();
+$conf->args();
+
+if($conf->get('help')) {
+    usage("--help requested");
+}
+
+# we don't need to die on the config parsing, as we'll let people
+# pass in the requireds on the command line if they so choose.
+if($conf->get('config')) {
+    $conf->file($conf->get('config'));
+}
+
+our $outfile = $conf->outfile;
+
+my $rss = new XML::RSS (version => '2.0');
+
+# TODO do the same with the required fields
+my %opts = ();
+for my $key (@REQUIREDS) {
+    if($conf->get($key)) {
+        $opts{$key} = $conf->get($key);
+    } else {
+        usage("$key is a required element in the rpm2rss config file");
+    }
+}
+
+# if they are there, great, if not, just skip it
+for my $key (@OPTIONALS) {
+    if($conf->get($key)) {
+        $opts{$key} = $conf->get($key);
+    }
+}
+
+# build the channel object
+$rss->channel(%opts,
+              pubDate => rssdate(time),
+              lastBuildDate => rssdate(time),
+              generator => "rpm2rss v$VERSION - http://trac.dague.org/hacks"
+             );
+
+for my $file (@ARGV) {
+    my $pkg = RPM2->open_package($file);
+    if($pkg) {
+        process_pkg($pkg, $rss, $conf->baseurl, $file);
+    }
+}
+
+if($outfile) {
+    $rss->save($outfile);
+} else {
+    print $rss->as_string;
+}
+
+######################################################################
+#
+#  process_pkg($pkg, $rss)
+#
+#  Extract the appropriate elements from the $pkg RPM2 object that
+#  would be useful in the RSS feed, and add them directly to the
+#  XML::RSS object.  The final result is that a new item is added to
+#  the RSS.
+#
+######################################################################
+
+sub process_pkg {
+    my ($pkg, $rss, $url, $file) = @_;
+    my $vars = {
+                name => $pkg->tag('NAME'),
+                ver => $pkg->tag('VERSION'),
+                rel => $pkg->tag('RELEASE')
+               };
+
+    # standard rpm format title
+    my $title = $vars->{name} . "-" . $vars->{ver} . "-" . $vars->{rel};
+
+    my $time = $pkg->tag("BUILDTIME");
+
+    my $desc = format_desc($pkg->tag("SUMMARY"), $pkg->tag("DESCRIPTION"));
+
+    my @changes = $pkg->changelog();
+    my $change = find_changelog(\@changes, $vars->{ver}, $vars->{rel});
+    if($change) {
+        $desc .= "<hr/><b>Changelog:</b> $change->{name} <br/>\n" .
+            "<pre>$change->{text}</pre>";
+    }
+    
+    my %vars = (
+                title => $title,
+                guid => $pkg->tag("SHA1HEADER"),
+                pubDate => rssdate($time),
+                description => $desc
+               );
+    
+    if($url) {
+        my $local = $file;
+        $local =~ s{^.*/((i.86|noarch|x86_64)/)}{$1};
+        $vars{link} = "$url/" . $local
+    }
+
+    $rss->add_item(%vars);
+}
+
+######################################################################
+#
+#  my $string = find_changelog($changes, $version, $release)
+#
+#  Find the changelog entry from a list of changes for a specific rpm
+#  $version and $release number.  The $changes parameter is an array
+#  ref of a set of changelog entries.  $version and $release are
+#  passed seperately as a matter of convenience.
+#
+######################################################################
+
+sub find_changelog {
+    my ($changes, $version, $release) = @_;
+    foreach my $change (@$changes) {
+        if($change->{name} =~ /$version-$release/) {
+            return $change;
+        }
+    }
+    return undef;
+}
+
+######################################################################
+#
+#  my $text = format_desc($description)
+#
+#  Formats the preformatted description text of an rpm DESCRIPTION
+#  section to sensible HTML so that RSS displays accordingly.  This is
+#  pretty simple for right now just to get the line breaks reasonable,
+#  but might grow over time.
+#
+######################################################################
+
+sub format_desc {
+    my ($summary, $desc) = @_;
+    $desc =~ s{(\n\n)}{<br/><br/>}igs;
+    $desc =~ s{^(\s+)}{<br/>}igm;
+    return $summary . "<hr>" . $desc;
+}
+
+#######################################################################
+#
+#  $date_string = rssdate($time)
+#
+#  converts a UNIX time value to the RFC appropriate time string used
+#  for RSS feeds.
+#
+#######################################################################
+
+sub rssdate {
+    my $time = shift;
+    return strftime('%a, %d %b %Y %H:%M:%S %z', localtime($time));
+}
+
+######################################################################
+#
+#  my $config = appconf()
+#
+#  Returns the AppConfig object for rpm2rss.  All AppConfig parsing
+#  parameters are hard coded here.
+#
+######################################################################
+
+sub appconf {
+    my %cfg = (
+               CASE => 0,
+               # now this is very subtle.  But it turns out that CREATE has the undocumented
+               # feature that it really is a %s type.  You can specify a regex for create, and it
+               # will apply it to decide if the variable stands to get created.  
+               #
+               # I had originally set this to 0, which meant that any variable with a 0 in it would
+               # get created.  With undef it runs in strict mode as I was originally intending.
+          
+               CREATE => undef,
+               GLOBAL => { 
+                          DEFAULT => "",
+                          ARGCOUNT => ARGCOUNT_ONE,
+                         },
+              );
+    my $conf = AppConfig->new(\%cfg);
+    
+    populate_main_switches($conf);
+
+    return $conf;
+}
+
+sub populate_main_switches {
+    my $config = shift;
+    my @noargs = qw(debug version help quiet);
+
+    foreach my $arg (@noargs) {
+        $config->define($arg => {ARGCOUNT => ARGCOUNT_NONE});
+    }
+    foreach my $arg (@REQUIREDS, @OPTIONALS, qw(baseurl)) {
+        $config->define($arg => {ARGCOUNT => ARGCOUNT_ONE});
+    }
+
+    # specify times that we want aliases or defaults for
+    $config->define(
+                    "outfile" => { ALIAS => 'o' },
+                    "config" => { ALIAS => 'c' },
+                    "language" => { DEFAULT => 'en' }
+                   );
+}
+
+######################################################################
+#
+#  usage($error)
+#
+#  Prints usage for the program, including a specified error.  Exits the program.
+#
+######################################################################
+
+sub usage {
+    my $error = shift;
+    if($error) {
+        print "ERROR: $error!\n\n";
+    }
+    print <<END;
+Usage:
+  rpm2rss [-h] [-v] [-o output.rss] <-c rpm2rss.conf> pkg1.rpm [pkg2.rpm ... ]
+
+Options:
+  -h : this message
+  -v : verbose (currently a no op)
+  -o : output file for the rss (otherwise it prints to stdout)
+  -c : configuration file for the run (man rpm2rss.conf for more info)
+
+You may also pass conf file variables as their fully qualified flag
+(i.e. --title=...), but for most users it will be more convenient to
+just use the configuration file for this.
+END
+    exit 1;
+}

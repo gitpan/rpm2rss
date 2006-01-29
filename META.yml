@@ -1,0 +1,13 @@
+# http://module-build.sourceforge.net/META-spec.html
+#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
+name:         rpm2rss
+version:      0.1
+version_from: bin/rpm2rss
+installdirs:  site
+requires:
+    AppConfig:                     1.56
+    RPM2:                          0.66
+    XML::RSS:                      1
+
+distribution_type: module
+generated_by: ExtUtils::MakeMaker version 6.17

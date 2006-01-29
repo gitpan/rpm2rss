@@ -1,0 +1,8 @@
+bin/rpm2rss
+examples/rpm2rss.conf
+Makefile.PL
+MANIFEST			This list of files
+META.yml                                 Module meta-data (added by MakeMaker)
+COPYING
+README
+TODO

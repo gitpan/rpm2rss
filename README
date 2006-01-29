@@ -1,0 +1,18 @@
+*** rpm2rss - generate rss feeds for rpm directories ***
+
+INSTALLATION
+
+ * perl Makefile.PL
+ * make
+ * make test
+ * make install
+
+Easy... right? :)
+
+USAGE
+
+ * man rpm2rss, go from there
+
+EXAMPLES
+
+ * soon

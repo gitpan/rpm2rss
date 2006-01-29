@@ -1,0 +1,16 @@
+A quick list of things that I should add
+
+ - Better detection of file location, might need a filebase in
+ addition to urlbase to do that.  The arch inclusion is kind of a hack
+ at the moment.
+
+ - Test cases with psuedo rpms included in them.
+
+ - Some more example configs
+
+ - Fix image handling
+
+
+
+
+
