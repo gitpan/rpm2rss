@@ -1,0 +1,5 @@
+* 0.2 - Jan 31 2006
+- Put file query in an eval loop to handle mal formed RPM files
+
+* 0.1 - Jan 29 2006
+- First release

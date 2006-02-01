@@ -4,6 +4,7 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
               NAME              => 'rpm2rss',
               VERSION_FROM      => 'bin/rpm2rss',
+              ABSTRACT => "Build an RSS announce feed from a set of RPMs",
               PREREQ_PM         => {
                                     RPM2 => 0.66,
                                     XML::RSS => 1,

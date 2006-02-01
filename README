@@ -1,18 +1,39 @@
 *** rpm2rss - generate rss feeds for rpm directories ***
 
+REQUIREMENTS
+
+The following perl modules are required for rpm2rss
+
+ * RPM2 - for parsing of rpm files
+ * XML::RSS - for generating valid RSS
+ * AppConfig - for config file and command line parsing
+
 INSTALLATION
 
- * perl Makefile.PL
+ * perl Makefile.PL 
  * make
- * make test
+ * make test - currently a noop, I promiss to fix in the future
  * make install
 
 Easy... right? :)
 
 USAGE
 
- * man rpm2rss, go from there
+man rpm2rss, go from there
+
+There is an example rpm2rss.conf file included as well, that will
+hopefully help figure things out until they are all fully documented.
 
 EXAMPLES
 
  * soon
+
+QUESTIONS?
+
+...email me at sean at dague dot net, I'll get back to you, I
+promiss. I'm also very curious about other things that would make
+sense to get into the feed.
+
+PATCHES?
+
+...always welcomed.  Just send to the address above.

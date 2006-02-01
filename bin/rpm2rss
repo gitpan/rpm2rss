@@ -56,7 +56,7 @@ use Data::Dumper;
 use POSIX qw(strftime);
 use AppConfig qw(:expand :argcount);
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 
 our @OPTIONALS = qw(copyright editor webmaster image);
 our @REQUIREDS = qw(title language link description);
@@ -74,11 +74,8 @@ if($conf->get('config')) {
     $conf->file($conf->get('config'));
 }
 
-our $outfile = $conf->outfile;
-
 my $rss = new XML::RSS (version => '2.0');
 
-# TODO do the same with the required fields
 my %opts = ();
 for my $key (@REQUIREDS) {
     if($conf->get($key)) {
@@ -103,14 +100,18 @@ $rss->channel(%opts,
              );
 
 for my $file (@ARGV) {
-    my $pkg = RPM2->open_package($file);
-    if($pkg) {
-        process_pkg($pkg, $rss, $conf->baseurl, $file);
-    }
+    # This has to be wrapped in an eval as RPM2 doesn't do well with 
+    # broken rpms
+    eval {
+        my $pkg = RPM2->open_package($file);
+        if($pkg) {
+            process_pkg($pkg, $rss, $conf->baseurl, $file);
+        }
+    };
 }
 
-if($outfile) {
-    $rss->save($outfile);
+if($conf->outfile) {
+    $rss->save($conf->outfile);
 } else {
     print $rss->as_string;
 }
@@ -160,8 +161,11 @@ sub process_pkg {
         $local =~ s{^.*/((i.86|noarch|x86_64)/)}{$1};
         $vars{link} = "$url/" . $local
     }
-
-    $rss->add_item(%vars);
+    
+    # only create the item if there is enough useful information
+    if($vars{guid} and $vars{pubDate} and $vars{title}) {
+        $rss->add_item(%vars);
+    }
 }
 
 ######################################################################
